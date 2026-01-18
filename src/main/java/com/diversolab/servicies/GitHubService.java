@@ -11,8 +11,10 @@ import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.Base64;
 
 import org.apache.commons.lang3.time.DateUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -25,18 +27,31 @@ import com.diversolab.entities.github.GithubIssueResult;
 import com.diversolab.entities.github.GithubRelease;
 
 import io.netty.channel.ChannelOption;
+import jakarta.annotation.PostConstruct;
 import reactor.netty.http.client.HttpClient;
 
 @Service
 public class GitHubService implements IGitHubService {
 	
-	private String sinceDay="2023-01-01T00:00:00+00:00";
-	private String untilDay="2023-07-01T00:00:00+00:00";
-	private String bugLabel="type/bug";
-	private String bugTitle="";
+	@Value("${since.day}")
+	private String sinceDay;
 
-	private String user = "";
-	private String password = "";
+	@Value("${until.day}")
+	private String untilDay;
+
+	@Value("${bug.label}")
+	private String bugLabel;
+
+	@Value("${bug.title}")
+	private String bugTitle;
+
+	@Value("${github.user}")
+    private String user;
+
+    @Value("${github.password}")
+    private String password;
+
+	private GitHubRestService githubRestService;
 	// private MultiValueMap<String, String> mvmap = new LinkedMultiValueMap<String,String>(){
 	// 	{
 	// 		add("Authorization", Base64.getEncoder().encodeToString(String.format("%s:%s", user, password).getBytes()));
@@ -44,15 +59,39 @@ public class GitHubService implements IGitHubService {
 	// 	}
 	// };
 	// Consumer<HttpHeaders> headers = it -> it.addAll(mvmap);
-	HttpClient httpClient = HttpClient.create().responseTimeout(Duration.ofSeconds(20)).option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000);
-	WebClient client = WebClient.builder().clientConnector(new ReactorClientHttpConnector(httpClient))
-	.codecs(codecs -> codecs
-		  .defaultCodecs()
-		  .maxInMemorySize(5000 * 1024))
-	  .defaultHeaders(header -> header.setBasicAuth(user, password)).baseUrl("https://api.github.com/").build();
-	HttpServiceProxyFactory factory = HttpServiceProxyFactory.builder(WebClientAdapter.forClient(client)).build();
-	private GitHubRestService githubRestService = factory.createClient(GitHubRestService.class);
+	// HttpClient httpClient = HttpClient.create().responseTimeout(Duration.ofSeconds(20)).option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000);
+	// WebClient client = WebClient.builder().clientConnector(new ReactorClientHttpConnector(httpClient))
+	// .codecs(codecs -> codecs
+	// 	  .defaultCodecs()
+	// 	  .maxInMemorySize(5000 * 1024))
+	// 	.defaultHeader("User-Agent", "request")
+	//   .defaultHeaders(header -> header.setBasicAuth(user, password)).baseUrl("https://api.github.com/").build();
+	// HttpServiceProxyFactory factory = HttpServiceProxyFactory.builder(WebClientAdapter.forClient(client)).build();
+	// private GitHubRestService githubRestService = factory.createClient(GitHubRestService.class);
 
+
+	@PostConstruct
+    public void init() {
+        HttpClient httpClient;
+            httpClient = HttpClient.create()
+                    .responseTimeout(Duration.ofSeconds(20))
+                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000);
+
+        WebClient client;
+            client = WebClient.builder()
+                    .clientConnector(new ReactorClientHttpConnector(httpClient))
+                    .codecs(codecs -> codecs.defaultCodecs().maxInMemorySize(5 * 1024 * 1024))
+                    .defaultHeader("User-Agent", "PerformanceTrackerApp")
+                    .defaultHeader("Accept", "application/vnd.github+json")
+                    .defaultHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString((user + ":" + password).getBytes()))
+                    .baseUrl("https://api.github.com/")
+                    .build();
+
+        HttpServiceProxyFactory factory =
+            HttpServiceProxyFactory.builder(WebClientAdapter.forClient(client)).build();
+
+        this.githubRestService = factory.createClient(GitHubRestService.class);
+    }
 
 	/**
 	 * Returns a date given a string
@@ -262,10 +301,7 @@ public class GitHubService implements IGitHubService {
 
 
 		// We do not update per_page but the query. That means that the result will be different in each iteration and, eventually the condition will be met
-		while(result.getTotalCount() >= per_page){
-
-			result = this.githubRestService.getGithubIssues(query, page, per_page);
-			System.out.println("result: "+result.getTotalCount());
+		while(result.getTotalCount() != 0L){
 
 			List<GithubIssue> filteredIssues = new ArrayList<>();
 			if(divider > 1){
@@ -296,6 +332,9 @@ public class GitHubService implements IGitHubService {
 			createdSince = simpleDateFormat.format(DateUtils.addSeconds(result.getItems().get(result.getItems().size() - 1).getCreatedAt(), 1));
 			query = "repo:"+owner+"/"+repository+" is:issue created:"+createdSince+".."+untilString+" updated:>"+sinceString+" sort:created-asc";
 			System.out.println("query: "+query);
+
+			result = this.githubRestService.getGithubIssues(query, page, per_page);
+			System.out.println("result: "+result.getTotalCount());
 			
 		}
 			
@@ -407,10 +446,7 @@ public class GitHubService implements IGitHubService {
 
 		Integer divider = this.getDivider(sinceString, untilString, owner, repository);
 
-		while(result.getTotalCount() != 0){
-
-			result = this.githubRestService.getGithubIssues(query, page, per_page);
-			System.out.println("result: "+result.getTotalCount());
+		while(result.getTotalCount() != 0L){
 
 			List<GithubIssue> filteredIssues = new ArrayList<>();
 			if(divider > 1){
@@ -451,6 +487,7 @@ public class GitHubService implements IGitHubService {
 
 			result = this.githubRestService.getGithubIssues(query, page, per_page);
 			System.out.println("query: "+query);
+			System.out.println("result: "+result.getTotalCount());
 
 		}
 

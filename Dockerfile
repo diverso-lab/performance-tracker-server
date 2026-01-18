@@ -1,5 +1,5 @@
 # Imagen base
-FROM openjdk:17-jdk
+FROM openjdk:21-jdk
 
 # Variables de entorno para la base de datos
 ENV POSTGRES_USER=${POSTGRES_USER}

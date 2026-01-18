@@ -10,6 +10,13 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      GITHUB_USER: ${GITHUB_USER}
+      GITHUB_PASSWORD: ${GITHUB_PASSWORD}
+      SINCE_DAY: ${SINCE_DAY}
+      UNTIL_DAY: ${UNTIL_DAY}
+      BUG_LABEL: ${BUG_LABEL}
+      BUG_TITLE: ${BUG_TITLE}
+
   db:
     image: postgres
     environment:

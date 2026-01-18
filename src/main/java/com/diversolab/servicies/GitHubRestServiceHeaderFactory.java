@@ -1,28 +1,42 @@
 package com.diversolab.servicies;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
-import javax.enterprise.context.ApplicationScoped;
-import javax.ws.rs.core.MultivaluedMap;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
+import org.springframework.web.reactive.function.client.ClientRequest;
+import reactor.core.publisher.Mono;
 
-import org.eclipse.microprofile.config.inject.ConfigProperties;
-import org.eclipse.microprofile.rest.client.ext.ClientHeadersFactory;
-import org.jboss.resteasy.specimpl.MultivaluedMapImpl;
+/**
+ * Fábrica de filtros para añadir cabeceras Authorization (Basic Auth)
+ * en peticiones realizadas con WebClient.
+ */
+@Component
+public class GitHubRestServiceHeaderFactory {
 
-@ApplicationScoped
-@ConfigProperties(prefix = "github")
-public class GitHubRestServiceHeaderFactory implements ClientHeadersFactory {
+    @Value("${github.user}")
+    private String user;
 
-	String user = "";
-	String password = "";
+    @Value("${github.password}")
+    private String password;
 
-	@Override
-	public MultivaluedMap<String, String> update(MultivaluedMap<String, String> incomingHeaders,
-                                                 MultivaluedMap<String, String> clientOutgoingHeaders) {
-		MultivaluedMap<String, String> result = new MultivaluedMapImpl<>();
-		result.add("Authorization",
-				"Basic " + Base64.getEncoder().encodeToString(String.format("%s:%s", user, password).getBytes()));
-		return result;
-	}
+    /**
+     * Devuelve un filtro que añade la cabecera Authorization con credenciales básicas.
+     */
+    public ExchangeFilterFunction authorizationHeaderFilter() {
+        return ExchangeFilterFunction.ofRequestProcessor(request -> {
+            String credentials = user + ":" + password;
+            String encoded = Base64.getEncoder()
+                                   .encodeToString(credentials.getBytes(StandardCharsets.UTF_8));
 
+            ClientRequest newRequest = ClientRequest.from(request)
+                    .header("Authorization", "Basic " + encoded)
+                    .header("User-Agent", "request")
+                    .build();
+
+            return Mono.just(newRequest);
+        });
+    }
 }
